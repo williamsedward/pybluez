@@ -1,0 +1,16 @@
+#!/bin/bash -e
+#
+# Setup the basics for using pybluez
+
+if [ -z "$AG" ]; then
+    AG="sudo apt-get -qqy --no-install-recommends"
+fi
+
+echo AG is $AG
+
+user=$(whoami)
+echo "Current user: $user"
+
+$AG update || true
+
+$AG install bluetooth libbluetooth-dev libboost-python-dev libboost-thread-dev

@@ -18,7 +18,7 @@ class Beacon(object):
         return ret
 
 service = BeaconService()
-devices = service.scan(2)
+devices = service.scan(30)
 
 for address, data in list(devices.items()):
     b = Beacon(data, address)

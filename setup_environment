@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Setup the basics for using pybluez
+# Setup the environment for using pybluez
 
 if [ -z "$AG" ]; then
     AG="sudo apt-get -qqy --no-install-recommends"
@@ -14,3 +14,30 @@ echo "Current user: $user"
 $AG update || true
 
 $AG install bluetooth libbluetooth-dev libboost-python-dev libboost-thread-dev
+$AG install libglib2.0-dev pkg-config python3-dev libboost-all-dev
+$AG install libdbus-1-dev libusb-dev libudev-dev libical-dev
+#systemd libreadline-dev
+
+sudo python3 -m pip install --upgrade pip
+sudo pip3 install -U setuptools
+sudo pip3 install pyinstaller
+sudo pip3 install wheel
+sudo pip3 install pygattlib
+
+#gattlib setup
+#rm -rf gattlib*
+#pip3 download gattlib
+#gatt_path=$(ls | grep ^gattlib)
+#echo $gatt_path
+
+#tar xvzf ./$gatt_path
+#gatt_path=${gatt_path%.tar.gz}
+#echo $gatt_path
+
+#cd $gatt_path
+#sed -ie 's/boost_python-py34/boost_python-py35/' setup.py
+#sudo pip3 install .
+#cd ..
+
+sudo pip3 install -vvv pybluez
+sudo pip3 install -vvv pybluez[ble]

@@ -1,0 +1,20 @@
+hciconfig hci0 up
+hciconfig hci0 down
+
+sudo gatttool -t random -b AC:23:3F:66:47:7D --char-write-req -a 0x5001 -n 0x70110204 --listen
+sudo hcitool lescan | grep KLK
+sudo gatttool -t random -b AC:23:3F:66:47:7D -I
+
+bluetoothctl
+
+power off
+power on
+agent on
+scan on
+scan off
+info <MA:C0:0A:DD:RE:SS>
+
+sed sudo nano /lib/systemd/system/bluetooth.service
+
+ExecStart=/usr/lib/bluetooth/bluetoothd --experimental
+append experiemtnal in bluetooth.service with sed --------------

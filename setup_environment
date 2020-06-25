@@ -71,5 +71,7 @@ sudo make
 sudo make install
 cd ..
 sudo systemctl daemon-reload
+sudo systemctl stop bluetooth
+sudo systemctl start bluetooth
 sudo systemctl status bluetooth
- 
+

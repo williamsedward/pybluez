@@ -5,6 +5,8 @@ sudo gatttool -t random -b AC:23:3F:66:47:7D --char-write-req -a 0x5001 -n 0x701
 sudo hcitool lescan | grep KLK
 sudo gatttool -t random -b AC:23:3F:66:47:7D -I
 
+0x14
+
 bluetoothctl
 
 power off

@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-
 import os
 import binascii
 import logging
 import argparse
 import json
 import subprocess
-import time
+import re, time
 import sys
+import pexpect
 
 logger = logging.getLogger(__name__)
 #log_level = logging.ERROR
@@ -23,8 +23,56 @@ hci_interface_up = 'sudo hciconfig hci0 up'
 hci_interface_piscan = 'sudo hciconfig hci0 piscan'
 hci_interface_auth = 'sudo hciconfig hci0 auth'
 
-ble_scan_command = 'sudo timeout 10 hcitool lescan'
+ble_scan_command = 'sudo timeout 5 hcitool lescan'
+
 ble_connect_command = 'sudo hcitool lecc '
+ble_connect_success = 'Connection handle'
+ble_connect_error = 'Could not create connection'
+
+def open_bluetoothctl():
+    output = subprocess_with_results('bluetoothctl')
+    logger.info("open_bluetoothctl response:{}".format(output))
+
+def connect_ble(address):
+    output = subprocess_with_results(ble_connect_command + address)
+    logger.info("connect_ble response:{}".format(output))
+    if output[0:len(ble_connect_error)] == ble_connect_error:
+        logger.info("connect_ble error")
+        connect_ble(address)
+    elif output[0:len(ble_connect_success)] == ble_connect_success:
+        logger.info("connect_ble success")
+
+def scan_ble(hci="hci0"):
+    sleep_time = 0.2
+    conn = pexpect.spawn(hci_interface_down)
+    time.sleep(sleep_time)
+    conn = pexpect.spawn(hci_interface_up)
+    time.sleep(sleep_time)
+    conn = pexpect.spawn("sudo timeout 10 hcitool lescan")
+    time.sleep(sleep_time)
+
+    conn.expect("LE Scan \.+")
+    output = b""
+    adr_pat = "(?P<addr>([0-9A-F]{2}:){5}[0-9A-F]{2}) (?P<name>.*)"
+    while True:
+        try:
+            res = conn.expect(adr_pat)
+            output += conn.after
+        except pexpect.EOF:
+            break
+
+    lines = re.split('\r?\n', output.strip().decode("utf-8"))
+    lines = list(set(lines))
+    lines = [line for line in lines if re.match(adr_pat, line)]
+    lines = [re.match(adr_pat, line).groupdict() for line in lines]
+    lines = [line for line in lines if re.match('.*', line['name'])]
+    logger.info(lines)
+    return lines
+
+def subprocess_with_results(command):
+    process = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, universal_newlines=True)
+    output = process.stdout
+    return output
 
 def shell_command_without_result(command, wait_time, terminate_flag):
     process = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -55,11 +103,14 @@ def manage_hci(reset, setup):
         shell_command_without_result(hci_interface_auth, sleep_time, True)
     
 def process_mac_addresses(mac_add_list):
-    for mac in mac_add_list:
-        logger.info("\t" + str(mac))
-    manage_hci(True, True)
-    ble_scan_result = shell_command_with_result(ble_scan_command, 10, False)
-    logger.info(ble_scan_result)
+    scan_ble()
+    connect_ble('AC:23:3F:66:47:7D')
+    open_bluetoothctl()
+    #for mac in mac_add_list:
+    #    logger.info("\t" + str(mac))
+    #manage_hci(True, True)
+    #ble_scan_result = shell_command_with_result(ble_scan_command, 10, False)
+    #logger.info(ble_scan_result)
 
 def main():
     parser = argparse.ArgumentParser(description='Help display')

@@ -37,11 +37,12 @@ echo "alias python=/usr/local/bin/python3.8" >> ~/.bashrc
 source ~/.bashrc
 python -V
 
-sudo python3 -m pip install --upgrade pip
-sudo pip3 install -U setuptools
-sudo pip3 install pyinstaller
-sudo pip3 install wheel
-sudo pip3 install pygattlib
+sudo python3.8 -m pip install --upgrade pip
+sudo python3.8 -m pip install -U setuptools
+sudo python3.8 -m pip install pyinstaller
+sudo python3.8 -m pip install wheel
+sudo python3.8 -m pip install pygattlib
+sudo python3.8 -m pip install pexpect
 
 #gattlib setup
 #rm -rf gattlib*
@@ -58,8 +59,8 @@ sudo pip3 install pygattlib
 #sudo pip3 install .
 #cd ..
 
-sudo pip3 install -vvv pybluez
-sudo pip3 install -vvv pybluez[ble]
+sudo python3.8 -m pip install -vvv pybluez
+sudo python3.8 -m pip install -vvv pybluez[ble]
 
 #update to bluez-5.54 
 wget http://www.kernel.org/pub/linux/bluetooth/bluez-5.54.tar.xz

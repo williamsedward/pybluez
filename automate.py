@@ -29,9 +29,64 @@ ble_connect_command = 'sudo hcitool lecc '
 ble_connect_success = 'Connection handle'
 ble_connect_error = 'Could not create connection'
 
-def open_bluetoothctl():
-    output = subprocess_with_results('bluetoothctl')
-    logger.info("open_bluetoothctl response:{}".format(output))
+def strip_to_lines(output):
+    lines = re.split('\r?\n', output.strip().decode("utf-8"))
+    lines = list(set(lines))
+    logger.info("LINES")
+    logger.info(lines)
+    return lines
+
+def pexpect_session_feedback(child, command, pattern):
+    before_output = b""
+    after_output = b""
+    try:
+        child.sendline(command)
+        child.expect(pattern)
+        after_output += child.after
+        
+    #     output = b""
+    #     while True:
+    #         try:
+    #             res = child.expect('.*commmand.*')
+    #             output += child.after
+    #         except pexpect.EOF:
+    #             break
+
+    except Exception as e:
+        before_output += child.before
+        #print(str(e))
+        
+    print("before:" + str(before_output))
+    strip_to_lines(before_output)
+    print("after:" + str(after_output))
+    strip_to_lines(after_output)
+    return(child, before_output, after_output)
+
+def pexpect_feedback(command, pattern):
+    before_output = b""
+    after_output = b""
+    try:
+        child = pexpect.spawn(command)
+        child.expect(pattern)
+        after_output += child.after
+        
+    #     output = b""
+    #     while True:
+    #         try:
+    #             res = child.expect('.*commmand.*')
+    #             output += child.after
+    #         except pexpect.EOF:
+    #             break
+
+    except Exception as e:
+        before_output += child.before
+        #print(str(e))
+        
+    print("before:" + str(before_output))
+    strip_to_lines(before_output)
+    print("after:" + str(after_output))
+    strip_to_lines(after_output)
+    return(child, before_output, after_output)
 
 def connect_ble(address):
     output = subprocess_with_results(ble_connect_command + address)
@@ -103,9 +158,36 @@ def manage_hci(reset, setup):
         shell_command_without_result(hci_interface_auth, sleep_time, True)
     
 def process_mac_addresses(mac_add_list):
+    manage_hci(True, True)
     scan_ble()
     connect_ble('AC:23:3F:66:47:7D')
-    open_bluetoothctl()
+    #open_bluetoothctl()
+    
+#     child_before_after = pexpect_feedback("sudo ftp ftp.openbsd.org", '.*command.*')
+#     print("before:" + str(child_before_after[0]))
+    
+    
+    child_before_after = pexpect_feedback("bluetoothctl", 'Agent registered.*')
+
+    child_before_after = pexpect_session_feedback(child_before_after[0], "info", ".*Connected: yes.*")
+    
+    child_before_after = pexpect_session_feedback(child_before_after[0], "pair", ".*Enter passkey.*")
+    
+    #"Failed to pair:"
+    
+    child_before_after = pexpect_session_feedback(child_before_after[0], "591522", ".*Pairing successful.*")
+    
+    child_before_after = pexpect_session_feedback(child_before_after[0], "menu gatt", ".*Print environment variables.*")
+    
+    child_before_after = pexpect_session_feedback(child_before_after[0], "list-attributes", ".*Print environment variables.*")
+    
+    child_before_after = pexpect_session_feedback(child_before_after[0], "select-attribute c5cc5001-127f-45ac-b0fc-7e46c3591334", ".*Print environment variables.*")
+    
+    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0070", ".*Print environment variables.*")
+    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0011", ".*Print environment variables.*")
+    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0002", ".*Print environment variables.*")
+    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0004", ".*Print environment variables.*")
+    
     #for mac in mac_add_list:
     #    logger.info("\t" + str(mac))
     #manage_hci(True, True)

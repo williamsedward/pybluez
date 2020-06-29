@@ -39,13 +39,11 @@ def strip_to_lines(name, output):
 def debug_output(name, output):
     if len(output) > 0:
         logger.info(name + " b:" + str(output))
-        return strip_to_lines(name + ":", output)
+        return strip_to_lines(name + ":\r\n", output)
     
 def return_valid_output(before_output, after_output):
     before_output_lines = debug_output("before_output", before_output)
     after_output_lines = debug_output("after_output", after_output)
-    print(before_output_lines)
-    print(after_output_lines)
     if before_output_lines is not None:
         return (before_output_lines, False)
     elif after_output_lines is not None:
@@ -78,23 +76,40 @@ def pexpect_feedback(command, pattern):
     return(child, output)
 
 def open_bluetoothctl():
-    sleep_time = 0.2
+    sleep_time = 0.3
+    logger.info("open_bluetoothctl()")
     child_output = pexpect_feedback("bluetoothctl", 'Agent registered.*')
     time.sleep(sleep_time)
+    
+    for line in child_output[1][0]:
+        if line == "[bluetooth]":
+            logger.info("ERROR [bluetooth]")  
+        if line == "Failed to pair:":
+            logger.info("ERROR Failed to pair:")
+    
     child_output = pexpect_session_feedback(child_output[0], "info", ".*Connected: yes.*")
     time.sleep(sleep_time)
     child_output = pexpect_session_feedback(child_output[0], "pair", ".*Enter passkey.*")
-    
-    #"Failed to pair:"
+
 
 def connect_ble(address):
     sleep_time = 0.2
     child_output = pexpect_feedback(ble_connect_command + address, 'Connection handle.*')
     time.sleep(sleep_time)
+    
+    for line in child_output[1][0]:
+        if line == "Could not create connection: Connection timed out":
+            logger.info("ERROR Connection timed out")
+            time.sleep(sleep_time)
+        if line == "Could not create connection: Input/output error":
+            logger.info("ERROR Input/output error")
+            manage_hci(True, False)
+        
     return child_output[1][1]
 
 def scan_ble(hci="hci0"):
     sleep_time = 0.2
+    logger.info("scan_ble()")
     conn = pexpect.spawn("sudo timeout 10 hcitool lescan")
     time.sleep(sleep_time)
 
@@ -119,6 +134,7 @@ def scan_ble(hci="hci0"):
 
 def manage_hci(reset, setup):
     sleep_time = 0.2
+    logger.info("manage_hci()")
     if reset == True:
         conn = pexpect.spawn(hci_interface_down)
         time.sleep(sleep_time)
@@ -131,21 +147,24 @@ def manage_hci(reset, setup):
         time.sleep(sleep_time)
 
 def process_mac_addresses(mac_add_list):
-    manage_hci(True, True)
-    scan_ble()
-    
     connected = False
     tries = 0
     sleep_time = 0.2
     
-    #connect_ble('AC:23:3F:66:47:7D')
-        
+    for mac in mac_add_list:
+        mac_address = ':'.join(format(s, '02x') for s in bytes.fromhex(mac))
+        logger.info("\t" + mac_address.upper())
+    
+    manage_hci(True, True)
+    scan_ble()
+
     while not connected and tries < 3:
         tries += 1
-        logger.info("connect_ble tries:" + str(tries))
-        connected = connect_ble('AC:23:3F:66:47:7D')
+        logger.info("connect_ble() tries:" + str(tries))
+        connected = connect_ble('AC:23:3F:66:47:7E')
         time.sleep(sleep_time)
         if connected:
+            logger.info("SUCCESS Connected")
             break
 
     if connected:
@@ -163,12 +182,6 @@ def process_mac_addresses(mac_add_list):
 #     child_output = pexpect_session_feedback(child_output[0], "write 0x0011", ".*Print environment variables.*")
 #     child_output = pexpect_session_feedback(child_output[0], "write 0x0002", ".*Print environment variables.*")
 #     child_output = pexpect_session_feedback(child_output[0], "write 0x0004", ".*Print environment variables.*")
-
-    #for mac in mac_add_list:
-    #    logger.info("\t" + str(mac))
-    #manage_hci(True, True)
-    #ble_scan_result = shell_command_with_result(ble_scan_command, 10, False)
-    #logger.info(ble_scan_result)
 
 def main():
     parser = argparse.ArgumentParser(description='Help display')

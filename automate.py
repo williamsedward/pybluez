@@ -39,7 +39,17 @@ def strip_to_lines(name, output):
 def debug_output(name, output):
     if len(output) > 0:
         logger.info(name + " b:" + str(output))
-        strip_to_lines(name + ":", output)
+        return strip_to_lines(name + ":", output)
+    
+def return_valid_output(before_output, after_output):
+    before_output_lines = debug_output("before_output", before_output)
+    after_output_lines = debug_output("after_output", after_output)
+    print(before_output_lines)
+    print(after_output_lines)
+    if before_output_lines is not None:
+        return (before_output_lines, False)
+    elif after_output_lines is not None:
+        return (after_output_lines, True)
 
 def pexpect_session_feedback(child, command, pattern):
     before_output = b""
@@ -51,11 +61,8 @@ def pexpect_session_feedback(child, command, pattern):
     except Exception as e:
         before_output += child.before
         #print(str(e))
-
-    debug_output("before_output", before_output)
-    debug_output("after_output", after_output)
-    
-    return(child, before_output, after_output)
+    output = return_valid_output(before_output, after_output)
+    return(child, output)
 
 def pexpect_feedback(command, pattern):
     before_output = b""
@@ -67,34 +74,24 @@ def pexpect_feedback(command, pattern):
     except Exception as e:
         before_output += child.before
         #print(str(e))
-
-    debug_output("before_output", before_output)
-    debug_output("after_output", after_output)
-    
-    return(child, before_output, after_output)
+    output = return_valid_output(before_output, after_output)
+    return(child, output)
 
 def open_bluetoothctl():
     sleep_time = 0.2
-    child_before_after = pexpect_feedback("bluetoothctl", 'Agent registered.*')
+    child_output = pexpect_feedback("bluetoothctl", 'Agent registered.*')
     time.sleep(sleep_time)
-    child_before_after = pexpect_session_feedback(child_before_after[0], "info", ".*Connected: yes.*")
+    child_output = pexpect_session_feedback(child_output[0], "info", ".*Connected: yes.*")
     time.sleep(sleep_time)
-    child_before_after = pexpect_session_feedback(child_before_after[0], "pair", ".*Enter passkey.*")
+    child_output = pexpect_session_feedback(child_output[0], "pair", ".*Enter passkey.*")
     
     #"Failed to pair:"
 
-def connect_ble(address, tries):
+def connect_ble(address):
     sleep_time = 0.2
-    child_before_after = pexpect_feedback(ble_connect_command + address, 'Connection handle.*')
+    child_output = pexpect_feedback(ble_connect_command + address, 'Connection handle.*')
     time.sleep(sleep_time)
-    tries -= 1
-    if len(child_before_after[2]) > 0:
-        return True
-    elif len(child_before_after[1]) > 0 and tries > 0:
-        logger.info("connect_ble retries:" + str(tries))
-        return connect_ble(address, tries)
-    else:
-        return False
+    return child_output[1][1]
 
 def scan_ble(hci="hci0"):
     sleep_time = 0.2
@@ -136,23 +133,36 @@ def manage_hci(reset, setup):
 def process_mac_addresses(mac_add_list):
     manage_hci(True, True)
     scan_ble()
-    connected = connect_ble('AC:23:3F:66:47:7D', 3)
     
+    connected = False
+    tries = 0
+    sleep_time = 0.2
+    
+    #connect_ble('AC:23:3F:66:47:7D')
+        
+    while not connected and tries < 3:
+        tries += 1
+        logger.info("connect_ble tries:" + str(tries))
+        connected = connect_ble('AC:23:3F:66:47:7D')
+        time.sleep(sleep_time)
+        if connected:
+            break
+
     if connected:
         open_bluetoothctl()
 
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "591522", ".*Pairing successful.*")
+#     child_output = pexpect_session_feedback(child_output[0], "591522", ".*Pairing successful.*")
 # 
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "menu gatt", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "menu gatt", ".*Print environment variables.*")
 # 
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "list-attributes", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "list-attributes", ".*Print environment variables.*")
 # 
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "select-attribute c5cc5001-127f-45ac-b0fc-7e46c3591334", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "select-attribute c5cc5001-127f-45ac-b0fc-7e46c3591334", ".*Print environment variables.*")
 # 
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0070", ".*Print environment variables.*")
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0011", ".*Print environment variables.*")
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0002", ".*Print environment variables.*")
-#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0004", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "write 0x0070", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "write 0x0011", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "write 0x0002", ".*Print environment variables.*")
+#     child_output = pexpect_session_feedback(child_output[0], "write 0x0004", ".*Print environment variables.*")
 
     #for mac in mac_add_list:
     #    logger.info("\t" + str(mac))

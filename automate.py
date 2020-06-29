@@ -29,12 +29,17 @@ ble_connect_command = 'sudo hcitool lecc '
 ble_connect_success = 'Connection handle'
 ble_connect_error = 'Could not create connection'
 
-def strip_to_lines(output):
-    lines = re.split('\r?\n', output.strip().decode("utf-8"))
-    lines = list(set(lines))
-    logger.info("LINES")
-    logger.info(lines)
+def strip_to_lines(name, output):
+    lines = re.split('\r?\n', output.decode("utf-8"))
+    logger.info(name)
+    for l in lines:
+        logger.info(l)
     return lines
+
+def debug_output(name, output):
+    if len(output) > 0:
+        logger.info(name + " b:" + str(output))
+        strip_to_lines(name + ":", output)
 
 def pexpect_session_feedback(child, command, pattern):
     before_output = b""
@@ -43,23 +48,13 @@ def pexpect_session_feedback(child, command, pattern):
         child.sendline(command)
         child.expect(pattern)
         after_output += child.after
-        
-    #     output = b""
-    #     while True:
-    #         try:
-    #             res = child.expect('.*commmand.*')
-    #             output += child.after
-    #         except pexpect.EOF:
-    #             break
-
     except Exception as e:
         before_output += child.before
         #print(str(e))
-        
-    print("before:" + str(before_output))
-    strip_to_lines(before_output)
-    print("after:" + str(after_output))
-    strip_to_lines(after_output)
+
+    debug_output("before_output", before_output)
+    debug_output("after_output", after_output)
+    
     return(child, before_output, after_output)
 
 def pexpect_feedback(command, pattern):
@@ -69,40 +64,40 @@ def pexpect_feedback(command, pattern):
         child = pexpect.spawn(command)
         child.expect(pattern)
         after_output += child.after
-        
-    #     output = b""
-    #     while True:
-    #         try:
-    #             res = child.expect('.*commmand.*')
-    #             output += child.after
-    #         except pexpect.EOF:
-    #             break
-
     except Exception as e:
         before_output += child.before
         #print(str(e))
-        
-    print("before:" + str(before_output))
-    strip_to_lines(before_output)
-    print("after:" + str(after_output))
-    strip_to_lines(after_output)
+
+    debug_output("before_output", before_output)
+    debug_output("after_output", after_output)
+    
     return(child, before_output, after_output)
 
-def connect_ble(address):
-    output = subprocess_with_results(ble_connect_command + address)
-    logger.info("connect_ble response:{}".format(output))
-    if output[0:len(ble_connect_error)] == ble_connect_error:
-        logger.info("connect_ble error")
-        connect_ble(address)
-    elif output[0:len(ble_connect_success)] == ble_connect_success:
-        logger.info("connect_ble success")
+def open_bluetoothctl():
+    sleep_time = 0.2
+    child_before_after = pexpect_feedback("bluetoothctl", 'Agent registered.*')
+    time.sleep(sleep_time)
+    child_before_after = pexpect_session_feedback(child_before_after[0], "info", ".*Connected: yes.*")
+    time.sleep(sleep_time)
+    child_before_after = pexpect_session_feedback(child_before_after[0], "pair", ".*Enter passkey.*")
+    
+    #"Failed to pair:"
+
+def connect_ble(address, tries):
+    sleep_time = 0.2
+    child_before_after = pexpect_feedback(ble_connect_command + address, 'Connection handle.*')
+    time.sleep(sleep_time)
+    tries -= 1
+    if len(child_before_after[2]) > 0:
+        return True
+    elif len(child_before_after[1]) > 0 and tries > 0:
+        logger.info("connect_ble retries:" + str(tries))
+        return connect_ble(address, tries)
+    else:
+        return False
 
 def scan_ble(hci="hci0"):
     sleep_time = 0.2
-    conn = pexpect.spawn(hci_interface_down)
-    time.sleep(sleep_time)
-    conn = pexpect.spawn(hci_interface_up)
-    time.sleep(sleep_time)
     conn = pexpect.spawn("sudo timeout 10 hcitool lescan")
     time.sleep(sleep_time)
 
@@ -121,73 +116,44 @@ def scan_ble(hci="hci0"):
     lines = [line for line in lines if re.match(adr_pat, line)]
     lines = [re.match(adr_pat, line).groupdict() for line in lines]
     lines = [line for line in lines if re.match('.*', line['name'])]
-    logger.info(lines)
+    for l in lines:
+        logger.info(l)
     return lines
 
-def subprocess_with_results(command):
-    process = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, universal_newlines=True)
-    output = process.stdout
-    return output
-
-def shell_command_without_result(command, wait_time, terminate_flag):
-    process = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    time.sleep(wait_time)
-    if terminate_flag:
-        process.terminate()
-
-def shell_command_with_result(command, wait_time, terminate_flag):
-    process = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    retcode = process.wait()
-    time.sleep(wait_time)
-    if terminate_flag:
-        process.terminate()
-    text = process.stdout.read()
-    print(text)
-    if len(text) > 0:
-        return text
-    
 def manage_hci(reset, setup):
     sleep_time = 0.2
     if reset == True:
-        shell_command_without_result(hci_interface_down, sleep_time, True)
+        conn = pexpect.spawn(hci_interface_down)
         time.sleep(sleep_time)
-        shell_command_without_result(hci_interface_up, sleep_time, True)
+        conn = pexpect.spawn(hci_interface_up)
+        time.sleep(sleep_time)
     if setup == True:
-        shell_command_without_result(hci_interface_piscan, sleep_time, True)
+        conn = pexpect.spawn(hci_interface_piscan)
         time.sleep(sleep_time)
-        shell_command_without_result(hci_interface_auth, sleep_time, True)
-    
+        conn = pexpect.spawn(hci_interface_auth)
+        time.sleep(sleep_time)
+
 def process_mac_addresses(mac_add_list):
     manage_hci(True, True)
     scan_ble()
-    connect_ble('AC:23:3F:66:47:7D')
-    #open_bluetoothctl()
+    connected = connect_ble('AC:23:3F:66:47:7D', 3)
     
-#     child_before_after = pexpect_feedback("sudo ftp ftp.openbsd.org", '.*command.*')
-#     print("before:" + str(child_before_after[0]))
-    
-    
-    child_before_after = pexpect_feedback("bluetoothctl", 'Agent registered.*')
+    if connected:
+        open_bluetoothctl()
 
-    child_before_after = pexpect_session_feedback(child_before_after[0], "info", ".*Connected: yes.*")
-    
-    child_before_after = pexpect_session_feedback(child_before_after[0], "pair", ".*Enter passkey.*")
-    
-    #"Failed to pair:"
-    
-    child_before_after = pexpect_session_feedback(child_before_after[0], "591522", ".*Pairing successful.*")
-    
-    child_before_after = pexpect_session_feedback(child_before_after[0], "menu gatt", ".*Print environment variables.*")
-    
-    child_before_after = pexpect_session_feedback(child_before_after[0], "list-attributes", ".*Print environment variables.*")
-    
-    child_before_after = pexpect_session_feedback(child_before_after[0], "select-attribute c5cc5001-127f-45ac-b0fc-7e46c3591334", ".*Print environment variables.*")
-    
-    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0070", ".*Print environment variables.*")
-    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0011", ".*Print environment variables.*")
-    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0002", ".*Print environment variables.*")
-    child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0004", ".*Print environment variables.*")
-    
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "591522", ".*Pairing successful.*")
+# 
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "menu gatt", ".*Print environment variables.*")
+# 
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "list-attributes", ".*Print environment variables.*")
+# 
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "select-attribute c5cc5001-127f-45ac-b0fc-7e46c3591334", ".*Print environment variables.*")
+# 
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0070", ".*Print environment variables.*")
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0011", ".*Print environment variables.*")
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0002", ".*Print environment variables.*")
+#     child_before_after = pexpect_session_feedback(child_before_after[0], "write 0x0004", ".*Print environment variables.*")
+
     #for mac in mac_add_list:
     #    logger.info("\t" + str(mac))
     #manage_hci(True, True)
@@ -196,15 +162,15 @@ def process_mac_addresses(mac_add_list):
 
 def main():
     parser = argparse.ArgumentParser(description='Help display')
-    
+
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument("-l", "--list", help="List of MAC Address to change BLE Tag mode parameters(view example files).", required=True)
-    
+
     optionnalNamed = parser.add_argument_group('optional named arguments')
     optionnalNamed.add_argument("-o", "--output", help="Output log file.", required=False)
 
     args = parser.parse_args()
-    
+
     # Log into a file
     if args.output is not None :
         # Check if files already exists
@@ -226,12 +192,12 @@ def main():
         fh.setLevel(log_level)
         fh.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
         root.addHandler(fh)
-    
+
     logger.info("Starting BLE Tag mode parameter updates")
     logger.info("")
-    
+
     mac_add_list = []
-     
+
     if args.list.find(".json") > 0:
         logger.info("Parse file in JSON mode")
         with open(args.list,'r') as json_file:
@@ -247,7 +213,7 @@ def main():
     else:
         logger.info("Error: {} is not in supported list format file. Only JSON and TXT are supported.".format(str(args.list)))
         exit(-1)
-    
+
     logger.info("Found {} MAC addresses in {}".format(str(len(mac_add_list)),str(args.list)))
 
     process_mac_addresses(mac_add_list)

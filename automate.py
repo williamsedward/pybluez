@@ -36,12 +36,19 @@ def strip_to_lines(name, output):
     return lines
 
 def intelligent_match(match, source):
-#     start_index = source.index(match)
-#     print("start_index:" + str(start_index))
-#     end_index = len(match) + start_index
-#     print("end_index:" + str(end_index))
-#     source = source[start_index:end_index]
-    return bool(match == source)
+    match_found = False
+    try:
+        start_index = source.index(match)
+        print("start_index:" + str(start_index))
+        end_index = len(match)
+        print("end_index:" + str(end_index))
+        source = source[start_index:start_index + end_index]
+        match_found = bool(match == source)
+    except Exception as e:
+        #print(str(e))
+        match_found = False
+    return match_found
+    #return bool(match == source)
 
 def debug_output(name, output):
     if len(output) > 0:
@@ -82,6 +89,33 @@ def pexpect_feedback(command, pattern):
     output = return_valid_output(before_output, after_output)
     return(conn, output)
 
+def clear_paired_devices():
+    sleep_time = 0.2
+    conn_output = pexpect_feedback('bluetoothctl', 'Agent registered.*')
+    time.sleep(sleep_time)
+    
+    conn_output = pexpect_session_feedback(conn_output[0], 'paired-devices', 'Device.*')
+    time.sleep(sleep_time)
+    #Device AC:23:3F:66:47:7E KLK-prox
+    
+    for line in conn_output[1][0]:
+        if len(line) > 0:
+            if intelligent_match('[bluetooth]', line):
+                logger.info('INFO:No devices found')
+                conn_output = pexpect_session_feedback(conn_output[0], 'exit', '.?')
+            if intelligent_match('Device', line):
+                logger.info('INFO:Device found')
+                mac_address = line[7:17 + 7]
+                logger.info('INFO:Removing Mac' + str(mac_address))
+#     conn_output = pexpect_session_feedback(conn_output[0], 'remove address', 'Device has been removed.*')
+#     time.sleep(sleep_time)
+#     
+#     for line in conn_output[1][0]:
+#             if len(line) > 0:
+#                 if intelligent_match(Device AC:23:3F:66:47:7E not available', line):
+#                     logger.info('ERROR ')
+#                     error_flag = True
+
 def open_bluetoothctl():
     sleep_time = 0.3
     pair_code = 409132
@@ -93,10 +127,10 @@ def open_bluetoothctl():
     for line in conn_output[1][0]:
         if len(line) > 0:
             if intelligent_match('[bluetooth]', line):
-                logger.info('ERROR [bluetooth]')
+                logger.info('ERROR:[bluetooth]')
                 error_flag = True
             if intelligent_match('Failed to pair: org.bluez.Error.ConnectionAttemptFailed', line):
-                logger.info('ERROR Failed to pair')
+                logger.info('ERROR:Failed to pair')
                 error_flag = True
     
     if not error_flag:
@@ -106,7 +140,7 @@ def open_bluetoothctl():
         for line in conn_output[1][0]:
             if len(line) > 0:
                 if intelligent_match('Missing device address argument', line):
-                    logger.info('ERROR Not Connected')
+                    logger.info('ERROR:Not Connected')
                     error_flag = True
 
     if not error_flag:
@@ -116,7 +150,7 @@ def open_bluetoothctl():
         for line in conn_output[1][0]:
             if len(line) > 0:
                 if intelligent_match('Missing device address argument', line):
-                    logger.info('ERROR Not Connected')
+                    logger.info('ERROR:Not Connected')
                     error_flag = True
     
     if not error_flag:
@@ -141,10 +175,10 @@ def connect_ble(address):
     for line in conn_output[1][0]:
         if len(line) > 0:
             if intelligent_match('Could not create connection: Connection timed out', line):
-                logger.info('ERROR Connection timed out')
+                logger.info('ERROR:Connection timed out')
                 time.sleep(sleep_time)
             if intelligent_match('Could not create connection: Input/output error', line):
-                logger.info('ERROR Input/output error')
+                logger.info('ERROR:Input/output error')
                 manage_hci(True, False)
         
     return conn_output[1][1]
@@ -175,7 +209,7 @@ def scan_ble(hci='hci0'):
     return lines
 
 def manage_hci(reset, setup):
-    sleep_time = 0.2
+    sleep_time = 0.3
     logger.info('manage_hci()')
     if reset == True:
         conn = pexpect.spawn(hci_interface_down)
@@ -197,13 +231,15 @@ def process_mac_addresses(mac_add_list):
         mac_address = ':'.join(format(s, '02x') for s in bytes.fromhex(mac))
         logger.info('\t' + mac_address.upper())
     
+    mac_address = 'AC:23:3F:66:47:7E'
+    
     manage_hci(True, True)
     scan_ble()
 
     while not connected and tries < 3:
         tries += 1
         logger.info('connect_ble() tries:' + str(tries))
-        connected = connect_ble('AC:23:3F:66:47:7E')
+        connected = connect_ble(mac_address)
         time.sleep(sleep_time)
         if connected:
             logger.info('SUCCESS Connected')
@@ -211,6 +247,8 @@ def process_mac_addresses(mac_add_list):
 
     if connected:
         open_bluetoothctl()
+    else:
+        logger.info('FAILED on:' + mac_address)
 
 def main():
     parser = argparse.ArgumentParser(description='Help display')
@@ -268,7 +306,8 @@ def main():
 
     logger.info('Found {} MAC addresses in {}'.format(str(len(mac_add_list)),str(args.list)))
 
-    process_mac_addresses(mac_add_list)
+    clear_paired_devices()
+    #process_mac_addresses(mac_add_list)
 
     logger.info('BLE Tag pair report: total={}'.format(str(len(mac_add_list))))
     logger.info('Full process is finished.')

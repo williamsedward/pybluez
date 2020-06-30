@@ -3,12 +3,18 @@
 import re, time
 
 def intelligent_match(source, match):
-    start_index = source.index(match)
-    print("start_index:" + str(start_index))
-    end_index = len(match)
-    print("end_index:" + str(end_index))
-    source = source[start_index:start_index + end_index]
-    return bool(match == source)
+    match_found = False
+    try:
+        start_index = source.index(match)
+        print("start_index:" + str(start_index))
+        end_index = len(match)
+        print("end_index:" + str(end_index))
+        source = source[start_index:start_index + end_index]
+        match_found = bool(match == source)
+    except Exception as e:
+        #print(str(e))
+        match_found = False
+    return match_found
 
 def main():
     print('sanity string testing')
